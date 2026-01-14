@@ -40,7 +40,7 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <TopBar user={user} onMenuClick={() => setSidebarOpen(true)} />
+        <TopBar onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Main Dashboard Area */}
         <main className="flex-1 p-6 overflow-auto">
@@ -52,23 +52,33 @@ export default function DashboardPage() {
 
             {/* Filters Section */}
             <div className="mb-8 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-2xl">
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <input
-                  type="text"
-                  placeholder="Search tasks..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-4 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 w-full md:w-64"
-                />
-                <div className="flex gap-2">
-                  {['All', 'Active', 'Completed'].map((filter) => (
+              <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+                {/* Search Bar with Icon */}
+                <div className="relative w-full md:w-80">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-black/30 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                  />
+                </div>
+
+                {/* Filter Buttons */}
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {['All', 'Pending', 'Active', 'Completed'].map((filter) => (
                     <button
                       key={filter}
                       onClick={() => setSelectedFilter(filter)}
-                      className={`px-4 py-2 rounded-lg transition-all ${
+                      className={`px-4 py-2 rounded-lg transition-all capitalize ${
                         selectedFilter === filter
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-black/30 text-gray-300 hover:bg-black/40'
+                          ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                          : 'bg-black/30 text-gray-300 hover:bg-black/40 hover:text-white'
                       }`}
                     >
                       {filter}

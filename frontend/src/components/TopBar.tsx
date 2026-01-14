@@ -3,13 +3,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 
 interface TopBarProps {
-  user: any;
   onMenuClick: () => void;
 }
 
-export default function TopBar({ user, onMenuClick }: TopBarProps) {
+export default function TopBar({ onMenuClick }: TopBarProps) {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -26,8 +25,14 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
     greeting = 'Good Evening';
   }
 
+  // Determine user display name and email
+  const displayName = user?.first_name || user?.last_name
+    ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+    : user?.email || 'User';
+  const displayEmail = user?.email || 'Email not available';
+
   return (
-    <header className="bg-white/10 backdrop-blur-lg border-b border-white/20 shadow-2xl">
+    <header className="bg-white/10 backdrop-blur-lg border-b border-white/20 shadow-2xl z-[100]">
       <div className="px-6 py-4 flex items-center justify-between">
         {/* Mobile Menu Button */}
         <button
@@ -42,29 +47,37 @@ export default function TopBar({ user, onMenuClick }: TopBarProps) {
         {/* Greeting */}
         <div className="hidden lg:block">
           <h2 className="text-xl font-semibold text-white">
-            {greeting}, {user?.name || user?.email || 'User'}!
+            {greeting}, {displayName}!
           </h2>
-          <p className="text-gray-400 text-sm">{user?.email || 'Welcome back'}</p>
+          <p className="text-gray-400 text-sm">{displayEmail}</p>
         </div>
 
         {/* User Dropdown */}
-        <div className="relative"> 
+        <div className="relative">
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center space-x-2 text-white hover:text-gray-300 focus:outline-none"
           >
             <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-              {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+              {((user?.first_name || user?.last_name)
+                ? (user.first_name?.charAt(0) || user.last_name?.charAt(0))
+                : user?.email?.charAt(0)
+              )?.toUpperCase() || 'U'}
             </div>
-            <span className="hidden md:inline text-white">{user?.name || user?.email || 'User'}</span>
-            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="hidden md:inline text-white">{displayName}</span>
+            <svg
+              className={`w-4 h-4 ml-1 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
           {/* Dropdown Menu */}
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-xl shadow-2xl border border-white/20 py-1 z-50">
+            <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-xl shadow-2xl border border-white/20 py-1 z-[9999]">
               <button
                 onClick={() => {
                   router.push('/profile');

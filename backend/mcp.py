@@ -338,6 +338,42 @@ def delete_task(
         )
 
 
+def search_tasks_by_title_or_description(
+    search_term: str,
+    current_user: User = None,
+    session: Session = None
+) -> List[Task]:
+    """
+    Search for tasks by title or description containing the search term.
+
+    Args:
+        search_term: The term to search for in task titles or descriptions
+        current_user: The authenticated user
+        session: Database session
+
+    Returns:
+        List of tasks matching the search term
+    """
+    try:
+        # Build query to find tasks by title or description
+        query = select(Task).where(
+            (Task.user_id == current_user.id) &
+            (
+                (Task.title.ilike(f"%{search_term}%")) |
+                ((Task.description.is_not(None)) & (Task.description.ilike(f"%{search_term}%")))
+            )
+        )
+
+        tasks = session.exec(query.order_by(Task.created_at.desc())).all()
+        return tasks
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search tasks: {str(e)}"
+        )
+
+
 def toggle_complete(
     id: str,  # Changed from int to str to handle UUID
     current_user: User = None,
@@ -345,9 +381,10 @@ def toggle_complete(
 ) -> Dict[str, Any]:
     """
     Toggle the completion status of a task for the current user.
+    Can accept either a UUID ID or a search term to find the task by title/description.
 
     Args:
-        id: Task ID to toggle (UUID string)
+        id: Task ID to toggle (UUID string) or search term for title/description
         current_user: The authenticated user
         session: Database session
 
@@ -355,23 +392,48 @@ def toggle_complete(
         Dictionary with success status and updated task details
     """
     try:
-        # Convert string ID to UUID if needed
+        # First try to parse as UUID
         try:
             task_id = uuid.UUID(str(id))
+
+            # Get the task by ID
+            task = session.get(Task, task_id)
+
+            if not task:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Task not found"
+                )
+
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid task ID format"
-            )
+            # If it's not a valid UUID, treat it as a search term
+            search_term = str(id).strip()
 
-        # Get the task
-        task = session.get(Task, task_id)
+            # Handle the case where AI returns placeholder text like "<task_id>"
+            if search_term.startswith("<") and search_term.endswith(">"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid task identifier provided. Please provide a valid task ID or description to complete the task."
+                )
 
-        if not task:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Task not found"
-            )
+            matching_tasks = search_tasks_by_title_or_description(search_term, current_user, session)
+
+            if not matching_tasks:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Could not find a task with the description '{search_term}'. Please provide the task ID or a more specific description to complete the task."
+                )
+            elif len(matching_tasks) > 1:
+                # If multiple tasks match, return a list of matching tasks
+                task_titles = [f"'{task.title}' (ID: {task.id})" for task in matching_tasks[:5]]  # Limit to first 5
+                task_list_str = ", ".join(task_titles)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Found multiple tasks matching '{search_term}'. Please provide the specific task ID to complete. Matching tasks: {task_list_str}"
+                )
+            else:
+                # Exactly one task matched
+                task = matching_tasks[0]
 
         if task.user_id != current_user.id:
             raise HTTPException(
@@ -407,4 +469,136 @@ def toggle_complete(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to toggle task completion: {str(e)}"
+        )
+
+
+def delete_task_by_search(
+    search_term: str,
+    current_user: User = None,
+    session: Session = None
+) -> Dict[str, Any]:
+    """
+    Delete a task by searching for it by title or description.
+
+    Args:
+        search_term: The term to search for in task titles or descriptions
+        current_user: The authenticated user
+        session: Database session
+
+    Returns:
+        Dictionary with success status and task ID
+    """
+    try:
+        # Handle the case where AI returns placeholder text like "<task_id>"
+        if search_term.startswith("<") and search_term.endswith(">"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid task identifier provided. Please provide a valid task ID or description to delete the task."
+            )
+
+        # Search for tasks matching the search term
+        matching_tasks = search_tasks_by_title_or_description(search_term, current_user, session)
+
+        if not matching_tasks:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Could not find a task with the description '{search_term}'. Please provide the task ID or a more specific description to delete the task."
+            )
+        elif len(matching_tasks) > 1:
+            # If multiple tasks match, return a list of matching tasks
+            task_titles = [f"'{task.title}' (ID: {task.id})" for task in matching_tasks[:5]]  # Limit to first 5
+            task_list_str = ", ".join(task_titles)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Found multiple tasks matching '{search_term}'. Please provide the specific task ID to delete. Matching tasks: {task_list_str}"
+            )
+        else:
+            # Exactly one task matched
+            task = matching_tasks[0]
+
+            if task.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to delete this task"
+                )
+
+            # Delete the task
+            session.delete(task)
+            session.commit()
+
+            return {
+                "success": True,
+                "message": f"Task '{task.title}' deleted successfully",
+                "task_id": str(task.id)
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete task: {str(e)}"
+        )
+
+
+def complete_all_pending_tasks(
+    current_user: User = None,
+    session: Session = None
+) -> Dict[str, Any]:
+    """
+    Mark all pending tasks as completed for the current user.
+
+    Args:
+        current_user: The authenticated user
+        session: Database session
+
+    Returns:
+        Dictionary with success status and summary of completed tasks
+    """
+    try:
+        # Get all pending tasks for the user
+        query = select(Task).where(
+            (Task.user_id == current_user.id) &
+            (Task.completed == False)
+        )
+
+        pending_tasks = session.exec(query.order_by(Task.created_at.desc())).all()
+
+        if not pending_tasks:
+            return {
+                "success": True,
+                "message": "No pending tasks to complete.",
+                "count": 0,
+                "tasks_completed": []
+            }
+
+        # Update all pending tasks to completed
+        completed_task_titles = []
+        for task in pending_tasks:
+            task.completed = True
+            task.updated_at = datetime.utcnow()
+            session.add(task)
+            completed_task_titles.append(task.title)
+
+        session.commit()
+
+        return {
+            "success": True,
+            "message": f"Successfully completed {len(pending_tasks)} pending task(s).",
+            "count": len(pending_tasks),
+            "tasks_completed": [
+                {
+                    "id": str(task.id),
+                    "title": task.title,
+                    "priority": task.priority.value
+                } for task in pending_tasks
+            ]
+        }
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete all pending tasks: {str(e)}"
         )

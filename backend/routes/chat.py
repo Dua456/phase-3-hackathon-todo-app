@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 try:
     from models import User, Conversation, Message, RoleEnum
     from db import get_session
-    from mcp import add_task, list_tasks, update_task, delete_task, toggle_complete
+    from mcp import add_task, list_tasks, update_task, delete_task, toggle_complete, search_tasks_by_title_or_description, delete_task_by_search, complete_all_pending_tasks
     from fastapi.security import HTTPBearer
     from fastapi import Depends, HTTPException, status
     from sqlmodel import Session
@@ -28,7 +28,7 @@ try:
 except ImportError:
     from backend.models import User, Conversation, Message, RoleEnum
     from backend.db import get_session
-    from backend.mcp import add_task, list_tasks, update_task, delete_task, toggle_complete
+    from backend.mcp import add_task, list_tasks, update_task, delete_task, toggle_complete, search_tasks_by_title_or_description, delete_task_by_search, complete_all_pending_tasks
     from fastapi.security import HTTPBearer
     from fastapi import Depends, HTTPException, status
     from sqlmodel import Session
@@ -129,17 +129,31 @@ Available functions:
 - update_task: Update an existing task with id and optional fields
 - delete_task: Delete a task by id
 - toggle_complete: Toggle the completion status of a task by id
+- complete_all_pending: Mark all pending tasks as completed
 
 Understand the user's request and call the appropriate function.
 If the user wants to add a task, extract the title, description, priority, and tags if mentioned.
 If the user wants to list tasks, determine if they want all, pending, or completed tasks.
 If the user wants to update a task, identify the task ID and the fields to update.
-If the user wants to delete a task, identify the task ID.
-If the user wants to mark a task as complete/incomplete, identify the task ID.
+If the user wants to delete a task, identify the task ID OR description/title. Look for keywords like "delete", "remove", "eliminate", "get rid of", or "cancel".
+If the user wants to mark a task as complete/incomplete, identify the task ID OR description/title. Look for keywords like "complete", "finish", "done", "mark as done", "accomplish", or "close".
+If the user wants to complete all pending tasks, look for phrases like "complete all pending", "mark all pending as done", "finish all pending", or "complete all tasks".
+
+For task completion/deletion, the user may say things like:
+- "Complete task #1" or "Mark task #1 as complete" (use the ID "1" in the id field)
+- "Finish the grocery task" or "Mark grocery task as done" (use the search term "grocery task" in the id field)
+- "Delete the meeting task" or "Remove the meeting task" (use the search term "meeting task" in the id field)
+- "Cancel task #3" or "Eliminate task #3" (use the ID "3" in the id field)
+- "Complete all pending tasks" or "Mark all pending as completed" (use intent "complete_all_pending")
+
+IMPORTANT: When the user refers to a task by its description or title (without an explicit number/ID), put the description/title text in the "id" field. When the user provides an explicit task number/ID, put that number/ID in the "id" field.
+
+When identifying tasks by description/title, try to match the closest task from their list.
+If multiple tasks match, ask the user to clarify or provide the task ID.
 
 Return a JSON response with the following format:
 {
-    "intent": "add_task|list_tasks|update_task|delete_task|toggle_complete|other",
+    "intent": "add_task|list_tasks|update_task|delete_task|toggle_complete|complete_all_pending|other",
     "parameters": {
         // Parameters based on intent
         "title": "...", // for add_task, update_task
@@ -147,7 +161,7 @@ Return a JSON response with the following format:
         "priority": "...", // for add_task, update_task
         "tags": "...", // for add_task, update_task
         "status_filter": "...", // for list_tasks
-        "id": "...", // for update_task, delete_task, toggle_complete
+        "id": "...", // for update_task, delete_task, toggle_complete (use actual ID if available, or description/title for search)
         "task_fields": {...} // for update_task
     },
     "message": "Natural language response to the user"
@@ -291,23 +305,50 @@ async def chat(
         elif intent == "delete_task":
             task_id = parameters.get("id")
             if task_id:
-                # Convert to string in case it's sent as a UUID object
-                task_id_str = str(task_id)
-                tool_result = delete_task(
-                    id=task_id_str,
-                    current_user=current_user,
-                    session=session
-                )
+                # First try to parse as UUID, if that fails, treat as search term
+                try:
+                    # Try to parse as UUID first
+                    uuid.UUID(str(task_id))
+                    # If this succeeds, use the original function
+                    tool_result = delete_task(
+                        id=str(task_id),
+                        current_user=current_user,
+                        session=session
+                    )
+                except ValueError:
+                    # If it's not a valid UUID, treat it as a search term
+                    tool_result = delete_task_by_search(
+                        search_term=str(task_id),
+                        current_user=current_user,
+                        session=session
+                    )
         elif intent == "toggle_complete":
             task_id = parameters.get("id")
             if task_id:
                 # Convert to string in case it's sent as a UUID object
-                task_id_str = str(task_id)
-                tool_result = toggle_complete(
-                    id=task_id_str,
-                    current_user=current_user,
-                    session=session
-                )
+                # First try to parse as UUID, if that fails, treat as search term
+                try:
+                    # Try to parse as UUID first
+                    uuid.UUID(str(task_id))
+                    # If this succeeds, use the original function
+                    tool_result = toggle_complete(
+                        id=str(task_id),
+                        current_user=current_user,
+                        session=session
+                    )
+                except ValueError:
+                    # If it's not a valid UUID, treat it as a search term
+                    tool_result = toggle_complete(
+                        id=str(task_id),  # This will now handle search terms
+                        current_user=current_user,
+                        session=session
+                    )
+        elif intent == "complete_all_pending":
+            # Complete all pending tasks for the user
+            tool_result = complete_all_pending_tasks(
+                current_user=current_user,
+                session=session
+            )
 
         # If there was a successful tool execution, update the message to user
         if tool_result and tool_result.get("success"):
@@ -346,6 +387,21 @@ async def chat(
                 if task:
                     status_text = task.get("status", "pending")
                     message_to_user = f"{tool_result.get('message', '')}\n\nTask is now {status_text}: {task.get('title', '')}"
+                else:
+                    message_to_user = tool_result.get("message", "")
+            elif intent == "complete_all_pending":
+                # For complete all pending, include summary of completed tasks
+                count = tool_result.get("count", 0)
+                tasks_completed = tool_result.get("tasks_completed", [])
+
+                if count > 0:
+                    task_list_text = "\n".join([
+                        f"- {task['title']} (Priority: {task['priority']})"
+                        for task in tasks_completed[:5]  # Limit to first 5 for brevity
+                    ])
+                    message_to_user = f"{tool_result.get('message', '')}\n\nCompleted tasks:\n{task_list_text}"
+                    if len(tasks_completed) > 5:
+                        message_to_user += f"\n... and {len(tasks_completed) - 5} more tasks"
                 else:
                     message_to_user = tool_result.get("message", "")
             else:

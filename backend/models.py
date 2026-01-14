@@ -29,6 +29,12 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True, max_length=255)
     hashed_password: Optional[str] = Field(default=None, max_length=255)
     provider: ProviderEnum = Field(default=ProviderEnum.email, sa_column=Column(SAEnum(ProviderEnum), nullable=False))
+    first_name: Optional[str] = Field(default=None, max_length=100)
+    last_name: Optional[str] = Field(default=None, max_length=100)
+    bio: Optional[str] = Field(default=None, max_length=500)
+    location: Optional[str] = Field(default=None, max_length=100)
+    timezone: Optional[str] = Field(default="UTC", max_length=50)
+    theme_preference: Optional[str] = Field(default="dark", max_length=20)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = Field(default=None)
 
@@ -85,6 +91,12 @@ class Message(SQLModel, table=True):
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    timezone: Optional[str] = "UTC"
+    theme_preference: Optional[str] = "dark"
 
 
 class UserLogin(BaseModel):
@@ -96,6 +108,12 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     provider: ProviderEnum
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    timezone: Optional[str] = "UTC"
+    theme_preference: Optional[str] = "dark"
     created_at: datetime
     last_login: Optional[datetime]
 

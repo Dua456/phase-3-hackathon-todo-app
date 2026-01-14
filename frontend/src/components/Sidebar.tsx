@@ -9,7 +9,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [isClosing, setIsClosing] = useState(false);
 
   const menuItems = [
@@ -37,6 +37,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const sidebarClass = `fixed lg:static inset-y-0 left-0 z-40 w-64 bg-gradient-to-b from-gray-900 to-gray-800 backdrop-blur-lg border-r border-white/20 shadow-2xl transform transition-transform duration-300 ease-in-out ${
     isOpen ? 'translate-x-0' : '-translate-x-full'
   } lg:translate-x-0`;
+
+  // Determine user display name and email
+  const displayName = user?.first_name || user?.last_name
+    ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+    : user?.email || 'User';
+  const displayEmail = user?.email || 'Email not available';
 
   return (
     <>
@@ -89,11 +95,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="p-4 border-t border-white/10">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                U
+                {((user?.first_name || user?.last_name)
+                  ? (user.first_name?.charAt(0) || user.last_name?.charAt(0))
+                  : user?.email?.charAt(0)
+                )?.toUpperCase() || 'U'}
               </div>
               <div>
-                <p className="text-white font-medium">User Name</p>
-                <p className="text-gray-400 text-sm">user@example.com</p>
+                <p className="text-white font-medium">{displayName}</p>
+                <p className="text-gray-400 text-sm">{displayEmail}</p>
               </div>
             </div>
           </div>

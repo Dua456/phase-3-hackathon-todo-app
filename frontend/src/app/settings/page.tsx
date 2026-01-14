@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { makeAuthenticatedRequest } from '../../lib/auth';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Sidebar from '@/components/Sidebar';
@@ -11,15 +12,22 @@ interface UserProfile {
   id: string;
   email: string;
   provider: string;
+  first_name?: string;
+  last_name?: string;
   created_at: string;
   last_login: string | null;
+  profile_picture?: string;
+  bio?: string;
+  location?: string;
+  timezone?: string;
+  theme_preference?: string;
 }
 
 export default function ProfileSettingsPage() {
   const { user, loading, checkAuthStatus } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const { theme, setTheme, isDarkMode } = useTheme();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saveStatus, setSaveStatus] = useState<{success: boolean; message: string} | null>(null);
@@ -38,6 +46,7 @@ export default function ProfileSettingsPage() {
       if (response.ok) {
         const userData = await response.json();
         setProfile(userData);
+        // The theme context already handles loading theme preference
       } else {
         console.error('Failed to fetch user profile');
       }
@@ -49,10 +58,24 @@ export default function ProfileSettingsPage() {
   };
 
   const handleSaveSettings = async () => {
-    // Simulate saving settings
     try {
-      setSaveStatus({ success: true, message: 'Settings saved successfully!' });
-      setTimeout(() => setSaveStatus(null), 3000);
+      // Update user profile with theme preference
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          theme_preference: theme,
+        }),
+      });
+
+      if (response.ok) {
+        setSaveStatus({ success: true, message: 'Settings saved successfully!' });
+        setTimeout(() => setSaveStatus(null), 3000);
+      } else {
+        throw new Error('Failed to save settings');
+      }
     } catch (error) {
       setSaveStatus({ success: false, message: 'Failed to save settings' });
       setTimeout(() => setSaveStatus(null), 3000);
@@ -83,7 +106,7 @@ export default function ProfileSettingsPage() {
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top Bar */}
-          <TopBar user={user} onMenuClick={() => setSidebarOpen(true)} />
+          <TopBar onMenuClick={() => setSidebarOpen(true)} />
 
           {/* Main Settings Area */}
           <main className="flex-1 p-6 overflow-auto">
@@ -186,17 +209,18 @@ export default function ProfileSettingsPage() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <label className="text-gray-300 font-medium">Dark Mode</label>
-                            <p className="text-gray-400 text-sm">Switch between light and dark themes</p>
+                            <label className="text-gray-300 font-medium">Theme</label>
+                            <p className="text-gray-400 text-sm">Choose your preferred theme</p>
                           </div>
-                          <button
-                            onClick={() => setDarkMode(!darkMode)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${darkMode ? 'bg-purple-600' : 'bg-gray-600'}`}
+                          <select
+                            value={theme}
+                            onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'auto')}
+                            className="bg-black/30 border border-white/20 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
                           >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${darkMode ? 'translate-x-6' : 'translate-x-1'}`}
-                            />
-                          </button>
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="auto">Auto</option>
+                          </select>
                         </div>
                       </div>
                     </div>

@@ -66,12 +66,30 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     try {
-      // In a real app, this would call an API to update the profile
-      setSaveStatus({ success: true, message: 'Profile updated successfully!' });
-      setTimeout(() => setSaveStatus(null), 3000);
-      setEditMode(false);
-      if (profile) {
-        setProfile({ ...profile, ...formData } as UserProfile);
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          bio: formData.bio,
+          location: formData.location,
+          timezone: formData.timezone,
+          theme_preference: formData.theme_preference,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedProfile = await response.json();
+        setProfile(updatedProfile);
+        setFormData(updatedProfile);
+        setSaveStatus({ success: true, message: 'Profile updated successfully!' });
+        setTimeout(() => setSaveStatus(null), 3000);
+        setEditMode(false);
+      } else {
+        throw new Error('Failed to update profile');
       }
     } catch (error) {
       setSaveStatus({ success: false, message: 'Failed to update profile' });
@@ -103,7 +121,7 @@ export default function ProfilePage() {
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top Bar */}
-          <TopBar user={user} onMenuClick={() => setSidebarOpen(true)} />
+          <TopBar onMenuClick={() => setSidebarOpen(true)} />
 
           {/* Main Profile Area */}
           <main className="flex-1 p-6 overflow-auto">

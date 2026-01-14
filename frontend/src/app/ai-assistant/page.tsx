@@ -35,7 +35,7 @@ export default function AIAssistantPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <TopBar user={user} onMenuClick={() => setSidebarOpen(true)} />
+        <TopBar onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Main Dashboard Area */}
         <main className="flex-1 p-6 overflow-auto">
@@ -62,11 +62,11 @@ export default function AIAssistantPage() {
                   </li>
                   <li className="flex items-start">
                     <span className="text-green-400 mr-2">✓</span>
-                    <span>Update tasks: "Mark task #1 as completed"</span>
+                    <span>Complete tasks: "Mark task #1 as completed" or "Complete the grocery task"</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-green-400 mr-2">✓</span>
-                    <span>Delete tasks: "Delete my urgent tasks"</span>
+                    <span>Delete tasks: "Delete my urgent tasks" or "Remove task #2"</span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-green-400 mr-2">✓</span>

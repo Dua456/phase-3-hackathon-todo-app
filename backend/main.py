@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
 from typing import Optional
+from pydantic import BaseModel
 import httpx
 import os
 from datetime import datetime, timedelta
@@ -213,6 +214,12 @@ async def register(user_data: UserCreate, session: Session = Depends(get_session
         email=user_data.email,
         hashed_password=hashed_password,
         provider=ProviderEnum.email,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        bio=user_data.bio,
+        location=user_data.location,
+        timezone=user_data.timezone,
+        theme_preference=user_data.theme_preference,
         last_login=datetime.utcnow()
     )
     session.add(user)
@@ -353,7 +360,16 @@ async def google_auth_callback(code: str, session: Session = Depends(get_session
         # Check if user exists
         existing_user = session.exec(select(User).where(User.email == email)).first()
 
+        # Extract first_name and last_name from Google user info
+        first_name = user_info.get("given_name", None)
+        last_name = user_info.get("family_name", None)
+
         if existing_user:
+            # Update existing user with name information if not already present
+            if not existing_user.first_name:
+                existing_user.first_name = first_name
+            if not existing_user.last_name:
+                existing_user.last_name = last_name
             existing_user.last_login = datetime.utcnow()
             session.add(existing_user)
             session.commit()
@@ -363,6 +379,12 @@ async def google_auth_callback(code: str, session: Session = Depends(get_session
                 email=email,
                 provider=ProviderEnum.google,
                 hashed_password=None,
+                first_name=first_name,
+                last_name=last_name,
+                bio=None,
+                location=user_info.get("locale", None),
+                timezone=user_info.get("locale", "UTC"),  # Google provides locale which can be used for timezone
+                theme_preference="dark",  # Default theme
                 last_login=datetime.utcnow()
             )
             session.add(user)
@@ -492,7 +514,22 @@ async def github_auth_callback(code: str, session: Session = Depends(get_session
         # Check if user exists
         existing_user = session.exec(select(User).where(User.email == email)).first()
 
+        # Extract first_name and last_name from GitHub user info
+        full_name = user_info.get("name", "")
+        first_name = None
+        last_name = None
+
+        if full_name:
+            name_parts = full_name.strip().split(" ", 1)
+            first_name = name_parts[0] if len(name_parts) > 0 else None
+            last_name = name_parts[1] if len(name_parts) > 1 else None
+
         if existing_user:
+            # Update existing user with name information if not already present
+            if not existing_user.first_name:
+                existing_user.first_name = first_name
+            if not existing_user.last_name:
+                existing_user.last_name = last_name
             existing_user.last_login = datetime.utcnow()
             session.add(existing_user)
             session.commit()
@@ -502,6 +539,12 @@ async def github_auth_callback(code: str, session: Session = Depends(get_session
                 email=email,
                 provider=ProviderEnum.github,
                 hashed_password=None,
+                first_name=first_name,
+                last_name=last_name,
+                bio=None,
+                location=user_info.get("location", None),
+                timezone="UTC",  # Default timezone, could be derived from GitHub if available
+                theme_preference="dark",  # Default theme
                 last_login=datetime.utcnow()
             )
             session.add(user)
@@ -696,6 +739,37 @@ async def toggle_task_completion(
     session.commit()
     session.refresh(task)
     return task
+
+
+# Pydantic model for updating user profile
+class UserProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    timezone: Optional[str] = None
+    theme_preference: Optional[str] = None
+
+
+@app.put("/auth/me", response_model=UserResponse)
+async def update_current_user_profile(
+    profile_data: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Update current user's profile information"""
+    # Update allowed fields
+    update_data = profile_data.dict(exclude_unset=True)
+
+    for field, value in update_data.items():
+        if hasattr(current_user, field):
+            setattr(current_user, field, value)
+
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+
+    return current_user
 
 
 # Include the chat router

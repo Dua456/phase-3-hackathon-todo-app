@@ -52,7 +52,7 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
       title: task.title,
       description: task.description,
       priority: task.priority,
-      tags: task.tags
+      tags: task.tags,
     });
   };
 
@@ -64,7 +64,7 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
       }
 
       await updateTask(taskId, editingTaskData);
-      setTasks(tasks.map(task =>
+      setTasks(tasks.map((task) =>
         task.id === taskId ? { ...task, ...editingTaskData } as Task : task
       ));
       setEditingTaskId(null);
@@ -79,28 +79,26 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
     setEditingTaskData({});
   };
 
-  const filteredTasks = tasks.filter(task => {
-    // Apply search filter
-    const matchesSearch = !searchQuery ||
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredTasks = tasks.filter((task) => {
+    const searchTerm = searchQuery.trim().toLowerCase();
 
-    // Apply status filter
+    const matchesSearch = !searchTerm ||
+      (task.title && task.title.toLowerCase().includes(searchTerm)) ||
+      (task.description && task.description.toLowerCase().includes(searchTerm)) ||
+      (task.tags && Array.isArray(task.tags) && task.tags.some((tag) => tag && tag.toLowerCase().includes(searchTerm))) ||
+      (task.priority && task.priority.toLowerCase().includes(searchTerm));
+
     let matchesStatus = true;
-    if (filter === 'Active') {
-      matchesStatus = !task.completed;
-    } else if (filter === 'Completed') {
-      matchesStatus = task.completed;
-    }
+    if (filter === 'Active' || filter === 'Pending') matchesStatus = !task.completed;
+    else if (filter === 'Completed') matchesStatus = task.completed;
 
     return matchesSearch && matchesStatus;
   });
 
   const handleToggleComplete = async (taskId: string, completed: boolean) => {
     try {
-      const updatedTask = await updateTask(taskId, { completed: !completed });
-      setTasks(tasks.map(task =>
+      await updateTask(taskId, { completed: !completed });
+      setTasks(tasks.map((task) =>
         task.id === taskId ? { ...task, completed: !completed } : task
       ));
     } catch (err) {
@@ -111,19 +109,13 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
   const handleDeleteTask = async (taskId: string) => {
     try {
       await deleteTask(taskId);
-      setTasks(tasks.filter(task => task.id !== taskId));
+      setTasks(tasks.filter((task) => task.id !== taskId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete task');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-white text-xl">Loading tasks...</div>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center h-64 text-white text-xl">Loading tasks...</div>;
 
   if (error) {
     return (
@@ -148,41 +140,41 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
             {searchQuery
               ? 'Try adjusting your search terms'
               : filter === 'Completed'
-                ? 'No completed tasks yet'
-                : filter === 'Active'
-                  ? 'No active tasks'
-                  : 'Create your first task to get started'}
+              ? 'No completed tasks yet'
+              : filter === 'Active' || filter === 'Pending'
+              ? 'No pending tasks'
+              : 'Create your first task to get started'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredTasks.map((task) => (
             editingTaskId === task.id ? (
-              // Edit mode
+              // ── Edit mode ────────────────────────────────────────────────
               <div
                 key={task.id}
-                className={`p-4 rounded-xl border bg-white/10 border-purple-500/50 transition-all`}
+                className="p-4 rounded-xl border bg-white/10 border-purple-500/50 transition-all overflow-hidden"
               >
                 <div className="space-y-3">
                   <input
                     type="text"
                     value={editingTaskData.title || ''}
-                    onChange={(e) => setEditingTaskData({...editingTaskData, title: e.target.value})}
-                    className="w-full px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onChange={(e) => setEditingTaskData({ ...editingTaskData, title: e.target.value })}
+                    className="w-full px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Task title"
                   />
                   <textarea
                     value={editingTaskData.description || ''}
-                    onChange={(e) => setEditingTaskData({...editingTaskData, description: e.target.value})}
-                    className="w-full px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onChange={(e) => setEditingTaskData({ ...editingTaskData, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Description"
                     rows={2}
                   />
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <select
-                      value={editingTaskData.priority || task.priority}
-                      onChange={(e) => setEditingTaskData({...editingTaskData, priority: e.target.value})}
-                      className="px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value={editingTaskData.priority || 'low'}
+                      onChange={(e) => setEditingTaskData({ ...editingTaskData, priority: e.target.value })}
+                      className="px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 min-w-[110px]"
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
@@ -190,22 +182,27 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
                     </select>
                     <input
                       type="text"
-                      value={Array.isArray(editingTaskData.tags) ? editingTaskData.tags.join(', ') : (editingTaskData.tags || task.tags).join(', ')}
-                      onChange={(e) => setEditingTaskData({...editingTaskData, tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag)})}
-                      className="flex-1 px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      value={editingTaskData.tags?.join(', ') || ''}
+                      onChange={(e) =>
+                        setEditingTaskData({
+                          ...editingTaskData,
+                          tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean),
+                        })
+                      }
+                      className="flex-1 px-3 py-2 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="Tags (comma separated)"
                     />
                   </div>
-                  <div className="flex gap-2 justify-end">
+                  <div className="flex gap-3 justify-end">
                     <button
                       onClick={() => handleSaveEdit(task.id)}
-                      className="flex items-center gap-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
+                      className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 px-5 rounded-lg transition-colors"
                     >
                       <FaCheck /> Save
                     </button>
                     <button
                       onClick={handleCancelEdit}
-                      className="flex items-center gap-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                      className="flex items-center gap-1.5 bg-gray-600 hover:bg-gray-700 text-white py-2 px-5 rounded-lg transition-colors"
                     >
                       <FaTimes /> Cancel
                     </button>
@@ -213,80 +210,95 @@ export default function LiveTaskView({ filter, searchQuery, refreshTrigger }: Li
                 </div>
               </div>
             ) : (
-              // View mode
+              // ── View mode ────────────────────────────────────────────────
               <div
                 key={task.id}
-                className={`p-4 rounded-xl border transition-all ${
-                  task.completed
-                    ? 'bg-green-500/10 border-green-500/30'
-                    : 'bg-white/5 border-white/20'
+                className={`p-4 rounded-xl border transition-all overflow-hidden ${
+                  task.completed ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/20'
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-3 flex-1">
+                <div className="flex items-start justify-between gap-4 w-full">
+                  <div className="flex items-start space-x-3 flex-1 min-w-0">
                     <button
                       onClick={() => handleToggleComplete(task.id, task.completed)}
-                      className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      className={`mt-1.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
                         task.completed
-                          ? 'bg-green-500 border-green-500 text-white'
+                          ? 'bg-green-500 border-green-500'
                           : 'border-gray-400 hover:border-purple-500'
                       }`}
                     >
                       {task.completed && (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
                     </button>
-                    <div className="flex-1">
-                      <h3 className={`font-medium ${task.completed ? 'text-gray-400 line-through' : 'text-white'}`}>
+
+                    <div className="flex-1 min-w-0">
+                      <h3
+                        className={`font-medium text-base ${
+                          task.completed ? 'text-gray-400 line-through' : 'text-white'
+                        }`}
+                      >
                         {task.title}
                       </h3>
+
                       {task.description && (
-                        <p className={`text-sm mt-1 ${task.completed ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <p
+                          className={`text-sm mt-1.5 ${
+                            task.completed ? 'text-gray-500' : 'text-gray-400'
+                          }`}
+                        >
                           {task.description}
                         </p>
                       )}
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {task.tags.map((tag, index) => (
+
+                      {/* Tags + badges ── fixed overflow */}
+                      <div className="mt-3 flex flex-wrap gap-2 items-center max-w-full overflow-hidden">
+                        {task.tags.map((tag, i) => (
                           <span
-                            key={index}
-                            className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full border border-purple-500/30"
+                            key={i}
+                            className="px-2.5 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full border border-purple-500/40 whitespace-nowrap flex-shrink-0 max-w-[180px] overflow-hidden text-ellipsis"
                           >
                             {tag}
                           </span>
                         ))}
+
                         {task.due_date && (
-                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full border border-blue-500/30">
+                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full border border-blue-500/40 whitespace-nowrap flex-shrink-0">
                             {new Date(task.due_date).toLocaleDateString()}
                           </span>
                         )}
-                        <span className={`px-2 py-1 text-xs rounded-full border ${
-                          task.priority === 'High'
-                            ? 'bg-red-500/20 text-red-300 border-red-500/30'
-                            : task.priority === 'Medium'
-                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-                              : 'bg-green-500/20 text-green-300 border-green-500/30'
-                        }`}>
-                          {task.priority}
+
+                        <span
+                          className={`px-2.5 py-1 text-xs rounded-full border whitespace-nowrap flex-shrink-0 ${
+                            task.priority === 'high'
+                              ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                              : task.priority === 'medium'
+                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                              : 'bg-green-500/20 text-green-300 border-green-500/40'
+                          }`}
+                        >
+                          {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 ml-4">
+
+                  <div className="flex gap-2 shrink-0">
                     <button
                       onClick={() => handleStartEdit(task)}
-                      className="text-blue-400 hover:text-blue-300 p-1"
-                      title="Edit task"
+                      className="text-blue-400 hover:text-blue-300 p-1.5"
+                      title="Edit"
                     >
-                      <FaEdit />
+                      <FaEdit size={18} />
                     </button>
                     <button
                       onClick={() => handleDeleteTask(task.id)}
-                      className="text-red-400 hover:text-red-300 p-1"
-                      title="Delete task"
+                      className="text-red-400 hover:text-red-300 p-1.5"
+                      title="Delete"
                     >
-                      <FaTrash />
+                      <FaTrash size={18} />
                     </button>
                   </div>
                 </div>
