@@ -3,9 +3,11 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LandingPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     const handleSmoothScroll = (e: Event) => {
@@ -71,7 +73,7 @@ export default function LandingPage() {
             <Link href="/ai-assistant" className="text-gray-300 hover:text-white transition">
               AI Assistant
             </Link>
-            <Link href="/dashboard" className="text-gray-300 hover:text-white transition">
+            <Link href={!loading && user ? "/dashboard" : "/login"} className="text-gray-300 hover:text-white transition">
               Dashboard
             </Link>
 
@@ -124,7 +126,7 @@ export default function LandingPage() {
                 AI Assistant
               </Link>
               <Link
-                href="/dashboard"
+                href={!loading && user ? "/dashboard" : "/login"}
                 className="text-gray-200 hover:text-white text-lg transition"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
